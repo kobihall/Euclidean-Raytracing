@@ -12,6 +12,8 @@ static const float PI = 3.14159265f;
 
 float2 _PixelOffset;
 
+float4 _DirectionalLight;
+
 struct Ray{
     float3 origin;
     float3 direction;
@@ -104,12 +106,24 @@ float3 Shade(inout Ray ray, RayHit hit)
     if (hit.distance < 1.#INF)
     {
         float3 specular = float3(0.6f, 0.6f, 0.6f);
+        float3 albedo = float3(0.1f, 0.1f, 0.1f);
         // Reflect the ray and multiply energy with specular reflection
         ray.origin = hit.position + hit.normal * 0.001f;
         ray.direction = reflect(ray.direction, hit.normal);
         ray.energy *= specular;
+
+        // Shadow test ray
+        bool shadow = false;
+        Ray shadowRay = CreateRay(hit.position + hit.normal * 0.001f, -1 * _DirectionalLight.xyz);
+        RayHit shadowHit = Trace(shadowRay);
+        if (shadowHit.distance != 1.#INF)
+        {
+            return float3(0.0f, 0.0f, 0.0f);
+        }
+
         // shade based on the dot product of the normal and the ray direction at the origin (ONLY EUCLIDEAN)
-        return dot(normalize(hit.normal),normalize(-1.0*ray.direction))*float3(1.0f,1.0f,1.0f);
+        //return dot(hit.normal,-1.0*ray.direction)*float3(0.1f,0.1f,0.1f);
+        return saturate(dot(hit.normal, normalize(_DirectionalLight.xyz+ray.direction)) * -1) * _DirectionalLight.w * albedo;
     }
     else
     {

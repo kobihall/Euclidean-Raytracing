@@ -8,6 +8,7 @@ public class RayTracingMaster : MonoBehaviour{
     private RenderTexture _target;
     private uint _currentSample = 0;
     private Material _addMaterial;
+    public Light DirectionalLight;
 
 
     private void OnRenderImage(RenderTexture source, RenderTexture destination){
@@ -46,6 +47,7 @@ public class RayTracingMaster : MonoBehaviour{
     }
 
     private void Update(){
+        //NOTE: this should also update along with the directional light at some point (it will reduce anti-aliasing noise)
         if (transform.hasChanged)
         {
             _currentSample = 0;
@@ -63,5 +65,7 @@ public class RayTracingMaster : MonoBehaviour{
         RayTracingShader.SetMatrix("_CameraInverseProjection", _camera.projectionMatrix.inverse);
         RayTracingShader.SetTexture(0, "_SkyboxTexture", SkyboxTexture);
         RayTracingShader.SetVector("_PixelOffset", new Vector2(Random.value, Random.value));
+        Vector3 l = DirectionalLight.transform.forward;
+        RayTracingShader.SetVector("_DirectionalLight", new Vector4(l.x, l.y, l.z, DirectionalLight.intensity));
     }
 }
