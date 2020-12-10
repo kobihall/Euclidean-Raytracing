@@ -15,6 +15,7 @@ float2 _PixelOffset;
 struct Ray{
     float3 origin;
     float3 direction;
+    float3 energy;
 };
 
 struct RayHit
@@ -28,6 +29,7 @@ Ray CreateRay(float3 origin, float3 direction){
     Ray ray;
     ray.origin = origin;
     ray.direction = direction;
+    ray.energy = float3(1.0f, 1.0f, 1.0f);
     return ray;
 }
 
@@ -96,17 +98,23 @@ RayHit Trace(Ray ray)
     return bestHit;
 }
 
-//shades the ground plane based on the normals calculated
+//shades the ground plane based on the normals calculated, updates the Ray object to be a new reflected ray 
 float3 Shade(inout Ray ray, RayHit hit)
 {
     if (hit.distance < 1.#INF)
     {
-        //shade based on the dot product of the normal and the ray direction at the origin (ONLY EUCLIDEAN)
-        //return hit.normal * 0.5f + 0.5f;
+        float3 specular = float3(0.6f, 0.6f, 0.6f);
+        // Reflect the ray and multiply energy with specular reflection
+        ray.origin = hit.position + hit.normal * 0.001f;
+        ray.direction = reflect(ray.direction, hit.normal);
+        ray.energy *= specular;
+        // shade based on the dot product of the normal and the ray direction at the origin (ONLY EUCLIDEAN)
         return dot(normalize(hit.normal),normalize(-1.0*ray.direction))*float3(1.0f,1.0f,1.0f);
     }
     else
     {
+        // Erase the ray's energy - the sky doesn't reflect anything
+        ray.energy = 0.0f;
         // Sample the skybox and write it
         float theta = acos(ray.direction.y) / -PI;
         float phi = atan2(ray.direction.x, -ray.direction.z) / -PI * 0.5f;
@@ -114,6 +122,7 @@ float3 Shade(inout Ray ray, RayHit hit)
     }
 }
 
+//function is called by the GPU for every pixel in every frame
 [numthreads(8,8,1)]
 void CSMain (uint3 id : SV_DispatchThreadID){
     // Get the dimensions of the RenderTexture
@@ -127,7 +136,15 @@ void CSMain (uint3 id : SV_DispatchThreadID){
     //Display pixel to screen
 
     // Trace and shade
-    RayHit hit = Trace(ray);
-    float3 result = Shade(ray, hit);
+    //RayHit hit = Trace(ray);
+    //float3 result = Shade(ray, hit);
+    float3 result = float3(0, 0, 0);
+    for (int i = 0; i < 8; i++)
+    {
+        RayHit hit = Trace(ray);
+        result += ray.energy * Shade(ray, hit);
+        if (!any(ray.energy))
+            break;
+    }
     Result[id.xy] = float4(result, 1);
 }
