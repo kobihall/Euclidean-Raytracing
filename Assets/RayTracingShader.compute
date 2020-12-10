@@ -15,6 +15,13 @@ struct Ray{
     float3 direction;
 };
 
+struct RayHit
+{
+    float3 position;
+    float distance;
+    float3 normal;
+};
+
 Ray CreateRay(float3 origin, float3 direction){
     Ray ray;
     ray.origin = origin;
@@ -35,6 +42,76 @@ Ray CreateCameraRay(float2 uv){
     return CreateRay(origin, direction);
 }
 
+//called when a ray intersects an object
+RayHit CreateRayHit()
+{
+    RayHit hit;
+    hit.position = float3(0.0f, 0.0f, 0.0f);
+    hit.distance = 1.#INF;
+    hit.normal = float3(0.0f, 0.0f, 0.0f);
+    return hit;
+}
+
+//updates a RayHit if the ray hits a horizontal ground plane
+void IntersectGroundPlane(Ray ray, inout RayHit bestHit)
+{
+    // Calculate distance along the ray where the ground plane is intersected
+    float t = -ray.origin.y / ray.direction.y;
+    if (t > 0 && t < bestHit.distance)
+    {
+        bestHit.distance = t;
+        bestHit.position = ray.origin + t * ray.direction;
+        bestHit.normal = float3(0.0f, 1.0f, 0.0f);
+    }
+}
+
+//updates a RayHit if the ray hits a sphere
+void IntersectSphere(Ray ray, inout RayHit bestHit, float4 sphere)
+{
+    // Calculate distance along the ray where the sphere is intersected
+    float3 d = ray.origin - sphere.xyz;
+    float p1 = -dot(ray.direction, d);
+    float p2sqr = p1 * p1 - dot(d, d) + sphere.w * sphere.w;
+    if (p2sqr < 0)
+        return;
+    float p2 = sqrt(p2sqr);
+    float t = p1 - p2 > 0 ? p1 - p2 : p1 + p2;
+    if (t > 0 && t < bestHit.distance)
+    {
+        bestHit.distance = t;
+        bestHit.position = ray.origin + t * ray.direction;
+        bestHit.normal = normalize(bestHit.position - sphere.xyz);
+    }
+}
+
+//code that propagates a ray forward to create a hit 
+RayHit Trace(Ray ray)
+{
+    RayHit bestHit = CreateRayHit();
+    IntersectGroundPlane(ray, bestHit);
+    // Add a floating unit sphere
+    IntersectSphere(ray, bestHit, float4(0, 0.5f, 0, 1.0f));
+    return bestHit;
+}
+
+//shades the ground plane based on the normals calculated
+float3 Shade(inout Ray ray, RayHit hit)
+{
+    if (hit.distance < 1.#INF)
+    {
+        //shade based on the dot product of the normal and the ray direction at the origin (ONLY EUCLIDEAN)
+        //return hit.normal * 0.5f + 0.5f;
+        return dot(normalize(hit.normal),normalize(-1.0*ray.direction))*float3(1.0f,1.0f,1.0f);
+    }
+    else
+    {
+        // Sample the skybox and write it
+        float theta = acos(ray.direction.y) / -PI;
+        float phi = atan2(ray.direction.x, -ray.direction.z) / -PI * 0.5f;
+        return _SkyboxTexture.SampleLevel(sampler_SkyboxTexture, float2(phi, theta), 0).xyz;
+    }
+}
+
 [numthreads(8,8,1)]
 void CSMain (uint3 id : SV_DispatchThreadID){
     // Get the dimensions of the RenderTexture
@@ -47,11 +124,8 @@ void CSMain (uint3 id : SV_DispatchThreadID){
 
     //Display pixel to screen
 
-    // Write some colors
-    //Result[id.xy] = float4(ray.direction * 0.5f + 0.5f, 1.0f);
-
-    // Sample the skybox and write it
-    float theta = acos(ray.direction.y) / -PI;
-    float phi = atan2(ray.direction.x, -ray.direction.z) / -PI * 0.5f;
-    Result[id.xy] = _SkyboxTexture.SampleLevel(sampler_SkyboxTexture, float2(phi, theta), 0);
+    // Trace and shade
+    RayHit hit = Trace(ray);
+    float3 result = Shade(ray, hit);
+    Result[id.xy] = float4(result, 1);
 }
