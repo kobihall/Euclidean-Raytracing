@@ -163,13 +163,14 @@ float rand()
     return result;
 }
 
-float3 SampleHemisphere(float3 normal)
+float3 SampleHemisphere(float3 normal, float alpha)
 {
     // Uniformly sample hemisphere direction
-    float cosTheta = rand();
+    float cosTheta = pow(rand(), 1.0f / (alpha + 1.0f));
     float sinTheta = sqrt(max(0.0f, 1.0f - cosTheta * cosTheta));
     float phi = 2 * PI * rand();
     float3 tangentSpaceDir = float3(cos(phi) * sinTheta, sin(phi) * sinTheta, cosTheta);
+
     // Transform direction to world space
     return mul(tangentSpaceDir, GetTangentSpace(normal));
 }
@@ -177,20 +178,37 @@ float3 SampleHemisphere(float3 normal)
 //===========================================================================
 //                               SHADE
 //===========================================================================
-//shades the ground plane based on the normals calculated, updates the Ray object to be a new reflected ray 
+//Shades the ground plane based on the normals calculated, updates the Ray object to be a new reflected ray
 float3 Shade(inout Ray ray, RayHit hit)
 {
     if (hit.distance < 1.#INF)
     {
-        // Reflect the ray and multiply energy with specular reflection
         ray.origin = hit.position + hit.normal * 0.001f;
-        float3 reflected = reflect(ray.direction, hit.normal);
-        float3 incoming = ray.direction;
-        ray.direction = SampleHemisphere(hit.normal);
-        float3 diffuse = 2 * min(1.0f - hit.specular, hit.albedo);
-        float alpha = 50.0f;
-        float3 specular = hit.specular * (alpha + 2) * pow(sdot(hit.normal, normalize(ray.direction-incoming)), alpha);
-        ray.energy *= (diffuse + specular) * sdot(hit.normal, ray.direction);
+        hit.albedo = min(1.0f - hit.specular, hit.albedo);
+        float specChance = dot(hit.specular, 1.0f / 3.0f);
+        float diffChance = dot(hit.albedo, 1.0f / 3.0f);
+        float sum = specChance + diffChance;
+        specChance /= sum;
+        diffChance /= sum;
+        // Roulette-select the ray's path
+        float roulette = rand();
+        if (roulette < specChance)
+        {
+            //Specular reflection
+            float3 reflected = reflect(ray.direction, hit.normal);
+            float3 incoming = ray.direction;
+            float alpha = 100.0f;
+            ray.direction = SampleHemisphere(reflect(ray.direction, hit.normal), alpha);
+            ray.energy *= (1.0f / specChance) * hit.specular * (alpha + 2)/(alpha + 1) * sdot(hit.normal, ray.direction);
+            //ray.energy *= (1.0f / specChance) * hit.specular * (alpha + 2) * pow(sdot(ray.direction, reflected), alpha) * sdot(hit.normal, ray.direction);
+            //float3 specular = hit.specular * (alpha + 2) * pow(sdot(hit.normal, normalize(ray.direction-incoming)), alpha);
+        }
+        else
+        {
+            //Diffuse reflection
+            ray.direction = SampleHemisphere(hit.normal, 1.0f);
+            ray.energy *= (1.0f / diffChance) * hit.albedo;
+        }
         return 0.0f;
     }
     else
@@ -207,7 +225,7 @@ float3 Shade(inout Ray ray, RayHit hit)
 //===========================================================================
 //                               CSMAIN
 //===========================================================================
-//function is called by the GPU for every pixel in every frame
+//Function is called by the GPU for every pixel in every frame
 [numthreads(8,8,1)]
 void CSMain (uint3 id : SV_DispatchThreadID){
     // Get the dimensions of the RenderTexture
