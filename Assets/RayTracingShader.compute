@@ -184,22 +184,13 @@ float3 Shade(inout Ray ray, RayHit hit)
     {
         // Reflect the ray and multiply energy with specular reflection
         ray.origin = hit.position + hit.normal * 0.001f;
+        float3 reflected = reflect(ray.direction, hit.normal);
         ray.direction = SampleHemisphere(hit.normal);
-        ray.energy *= 2 * hit.albedo * sdot(hit.normal, ray.direction);
-
-        // Shadow test ray
-        bool shadow = false;
-        Ray shadowRay = CreateRay(hit.position + hit.normal * 0.001f, -1 * _DirectionalLight.xyz);
-        RayHit shadowHit = Trace(shadowRay);
-        if (shadowHit.distance != 1.#INF)
-        {
-            //return float3(0.0f, 0.0f, 0.0f);
-        }
-
-        // shade based on the dot product of the normal and the ray direction at the origin (ONLY EUCLIDEAN)
-        //return dot(hit.normal,-1.0*ray.direction)*float3(0.1f,0.1f,0.1f);
-        return saturate(dot(hit.normal, _DirectionalLight.xyz) * -1) * _DirectionalLight.w * hit.albedo;
-        //return 0.0f;
+        float3 diffuse = 2 * min(1.0f - hit.specular, hit.albedo);
+        float alpha = 15.0f;
+        float3 specular = hit.specular * (alpha + 2) * pow(sdot(ray.direction, reflected), alpha);
+        ray.energy *= (diffuse + specular) * sdot(hit.normal, ray.direction);
+        return 0.0f;
     }
     else
     {
