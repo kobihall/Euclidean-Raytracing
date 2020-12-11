@@ -14,21 +14,6 @@ float2 _PixelOffset;
 
 float4 _DirectionalLight;
 
-struct Ray{
-    float3 origin;
-    float3 direction;
-    float3 energy;
-};
-
-struct RayHit
-{
-    float3 position;
-    float distance;
-    float3 normal;
-    float3 albedo;
-    float3 specular;
-};
-
 struct Sphere
 {
     float3 position;
@@ -39,7 +24,21 @@ struct Sphere
 
 StructuredBuffer<Sphere> _Spheres;
 
-Ray CreateRay(float3 origin, float3 direction){
+float sdot(float3 x, float3 y, float f = 1.0f)
+{
+    return saturate(dot(x, y) * f);
+}
+
+//===========================================================================
+//                                  RAY
+//===========================================================================
+struct Ray{
+    float3 origin;
+    float3 direction;
+    float3 energy;
+};
+
+Ray CreateRay(float3 origin, float3 direction) {
     Ray ray;
     ray.origin = origin;
     ray.direction = direction;
@@ -48,16 +47,41 @@ Ray CreateRay(float3 origin, float3 direction){
 }
 
 //Creates a Ray at a given uv value of the camera's plane
-Ray CreateCameraRay(float2 uv){
+Ray CreateCameraRay(float2 uv) {
     // Transform the camera origin to world space
     float3 origin = mul(_CameraToWorld, float4(0.0f, 0.0f, 0.0f, 1.0f)).xyz;
-    
+
     // Invert the perspective projection of the view-space position
     float3 direction = mul(_CameraInverseProjection, float4(uv, 0.0f, 1.0f)).xyz;
     // Transform the direction from camera to world space and normalize
     direction = mul(_CameraToWorld, float4(direction, 0.0f)).xyz;
     direction = normalize(direction);
     return CreateRay(origin, direction);
+}
+
+//===========================================================================
+//                                RAYHIT
+//===========================================================================
+struct RayHit
+{
+    float3 position;
+    float distance;
+    float3 normal;
+    float3 albedo;
+    float3 specular;
+};
+
+//generates arbitrary unit tangent and binormal vectors in the tangent space of the normal at a rayhit
+float3x3 GetTangentSpace(float3 normal)
+{
+    // Choose a helper vector for the cross product
+    float3 helper = float3(1, 0, 0);
+    if (abs(normal.x) > 0.99f)
+        helper = float3(0, 0, 1);
+    // Generate vectors
+    float3 tangent = normalize(cross(normal, helper));
+    float3 binormal = normalize(cross(normal, tangent));
+    return float3x3(tangent, binormal, normal);
 }
 
 //called when a ray intersects an object
@@ -72,6 +96,9 @@ RayHit CreateRayHit()
     return hit;
 }
 
+//===========================================================================
+//                            INTERSECTIONS
+//===========================================================================
 //updates a RayHit if the ray hits a horizontal ground plane
 void IntersectGroundPlane(Ray ray, inout RayHit bestHit)
 {
@@ -108,6 +135,9 @@ void IntersectSphere(Ray ray, inout RayHit bestHit, Sphere sphere)
     }
 }
 
+//===========================================================================
+//                                TRACE
+//===========================================================================
 //code that propagates a ray forward to create a hit 
 RayHit Trace(Ray ray)
 {
@@ -121,6 +151,32 @@ RayHit Trace(Ray ray)
     return bestHit;
 }
 
+//===========================================================================
+//                               SAMPLING
+//===========================================================================
+float2 _Pixel;
+float _Seed;
+float rand()
+{
+    float result = frac(sin(_Seed / 100.0f * dot(_Pixel, float2(12.9898f, 78.233f))) * 43758.5453f);
+    _Seed += 1.0f;
+    return result;
+}
+
+float3 SampleHemisphere(float3 normal)
+{
+    // Uniformly sample hemisphere direction
+    float cosTheta = rand();
+    float sinTheta = sqrt(max(0.0f, 1.0f - cosTheta * cosTheta));
+    float phi = 2 * PI * rand();
+    float3 tangentSpaceDir = float3(cos(phi) * sinTheta, sin(phi) * sinTheta, cosTheta);
+    // Transform direction to world space
+    return mul(tangentSpaceDir, GetTangentSpace(normal));
+}
+
+//===========================================================================
+//                               SHADE
+//===========================================================================
 //shades the ground plane based on the normals calculated, updates the Ray object to be a new reflected ray 
 float3 Shade(inout Ray ray, RayHit hit)
 {
@@ -128,8 +184,8 @@ float3 Shade(inout Ray ray, RayHit hit)
     {
         // Reflect the ray and multiply energy with specular reflection
         ray.origin = hit.position + hit.normal * 0.001f;
-        ray.direction = reflect(ray.direction, hit.normal);
-        ray.energy *= hit.specular;
+        ray.direction = SampleHemisphere(hit.normal);
+        ray.energy *= 2 * hit.albedo * sdot(hit.normal, ray.direction);
 
         // Shadow test ray
         bool shadow = false;
@@ -137,12 +193,13 @@ float3 Shade(inout Ray ray, RayHit hit)
         RayHit shadowHit = Trace(shadowRay);
         if (shadowHit.distance != 1.#INF)
         {
-            return float3(0.0f, 0.0f, 0.0f);
+            //return float3(0.0f, 0.0f, 0.0f);
         }
 
         // shade based on the dot product of the normal and the ray direction at the origin (ONLY EUCLIDEAN)
         //return dot(hit.normal,-1.0*ray.direction)*float3(0.1f,0.1f,0.1f);
         return saturate(dot(hit.normal, _DirectionalLight.xyz) * -1) * _DirectionalLight.w * hit.albedo;
+        //return 0.0f;
     }
     else
     {
@@ -155,6 +212,9 @@ float3 Shade(inout Ray ray, RayHit hit)
     }
 }
 
+//===========================================================================
+//                               CSMAIN
+//===========================================================================
 //function is called by the GPU for every pixel in every frame
 [numthreads(8,8,1)]
 void CSMain (uint3 id : SV_DispatchThreadID){
@@ -166,11 +226,12 @@ void CSMain (uint3 id : SV_DispatchThreadID){
     // Get a ray for the UVs
     Ray ray = CreateCameraRay(uv);
 
+    //initialize the Pixel for sampling according to the shader pixel
+    _Pixel = id.xy;
+
     //Display pixel to screen
 
     // Trace and shade
-    //RayHit hit = Trace(ray);
-    //float3 result = Shade(ray, hit);
     float3 result = float3(0, 0, 0);
     for (int i = 0; i < 8; i++)
     {
