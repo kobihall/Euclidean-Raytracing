@@ -20,6 +20,8 @@ struct Sphere
     float radius;
     float3 albedo;
     float3 specular;
+    float smoothness;
+    float3 emissive;
 };
 
 StructuredBuffer<Sphere> _Spheres;
@@ -69,6 +71,8 @@ struct RayHit
     float3 normal;
     float3 albedo;
     float3 specular;
+    float smoothness;
+    float3 emissive;
 };
 
 //generates arbitrary unit tangent and binormal vectors in the tangent space of the normal at a rayhit
@@ -93,6 +97,8 @@ RayHit CreateRayHit()
     hit.normal = float3(0.0f, 0.0f, 0.0f);
     hit.albedo = float3(0.0f, 0.0f, 0.0f);
     hit.specular = float3(0.0f, 0.0f, 0.0f);
+    hit.smoothness = 0;
+    hit.emissive = float3(0.0f, 0.0f, 0.0f);
     return hit;
 }
 
@@ -132,6 +138,8 @@ void IntersectSphere(Ray ray, inout RayHit bestHit, Sphere sphere)
         bestHit.normal = normalize(bestHit.position - sphere.position);
         bestHit.albedo = sphere.albedo;
         bestHit.specular = sphere.specular;
+        bestHit.smoothness = sphere.smoothness;
+        bestHit.emissive = sphere.emissive;
     }
 }
 
@@ -197,7 +205,7 @@ float3 Shade(inout Ray ray, RayHit hit)
             //Specular reflection
             float3 reflected = reflect(ray.direction, hit.normal);
             float3 incoming = ray.direction;
-            float alpha = 100.0f;
+            float alpha = pow(1000.0f, hit.smoothness * hit.smoothness);
             ray.direction = SampleHemisphere(reflect(ray.direction, hit.normal), alpha);
             ray.energy *= (1.0f / specChance) * hit.specular * (alpha + 2)/(alpha + 1) * sdot(hit.normal, ray.direction);
             //ray.energy *= (1.0f / specChance) * hit.specular * (alpha + 2) * pow(sdot(ray.direction, reflected), alpha) * sdot(hit.normal, ray.direction);
@@ -209,7 +217,7 @@ float3 Shade(inout Ray ray, RayHit hit)
             ray.direction = SampleHemisphere(hit.normal, 1.0f);
             ray.energy *= (1.0f / diffChance) * hit.albedo;
         }
-        return 0.0f;
+        return hit.emissive;
     }
     else
     {
