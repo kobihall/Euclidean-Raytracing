@@ -6,6 +6,7 @@ using UnityEngine;
 [RequireComponent(typeof(MeshFilter))]
 public class RayTracingObject : MonoBehaviour
 {
+    public Material material;
     private void OnEnable()
     {
         RayTracingMaster.RegisterObject(this);
@@ -13,5 +14,9 @@ public class RayTracingObject : MonoBehaviour
     private void OnDisable()
     {
         RayTracingMaster.UnregisterObject(this);
+    }
+    public Material GetMaterial()
+    {
+        return material;
     }
 }

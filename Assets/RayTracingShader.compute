@@ -35,6 +35,7 @@ struct MeshObject
 };
 StructuredBuffer<MeshObject> _MeshObjects;
 StructuredBuffer<float3> _Vertices;
+StructuredBuffer<float2> _UV;
 StructuredBuffer<int> _Indices;
 
 float sdot(float3 x, float3 y, float f = 1.0f)

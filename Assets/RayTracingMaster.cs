@@ -52,6 +52,9 @@ public class RayTracingMaster : MonoBehaviour{
         if (_vertexBuffer != null)
             _vertexBuffer.Release();
 
+        if (_uvBuffer != null)
+            _uvBuffer.Release();
+
         if (_indexBuffer != null)
             _indexBuffer.Release();
     }
@@ -116,10 +119,14 @@ public class RayTracingMaster : MonoBehaviour{
     }
     private static List<MeshObject> _meshObjects = new List<MeshObject>();
     private static List<Vector3> _vertices = new List<Vector3>();
+    private static List<Vector2> _uv = new List<Vector2>();
     private static List<int> _indices = new List<int>();
+    private static List<Texture> _albedoTextures = new List<Texture>();
     private ComputeBuffer _meshObjectBuffer;
     private ComputeBuffer _vertexBuffer;
+    private ComputeBuffer _uvBuffer;
     private ComputeBuffer _indexBuffer;
+    private ComputeBuffer _albedoBuffer;
 
     private static bool _meshObjectsNeedRebuilding = false;
     private static List<RayTracingObject> _rayTracingObjects = new List<RayTracingObject>();
@@ -148,19 +155,28 @@ public class RayTracingMaster : MonoBehaviour{
         // Clear all lists
         _meshObjects.Clear();
         _vertices.Clear();
+        _uv.Clear();
         _indices.Clear();
+        _albedoTextures.Clear();
         // Loop over all objects and gather their data
         foreach (RayTracingObject obj in _rayTracingObjects)
         {
             Mesh mesh = obj.GetComponent<MeshFilter>().sharedMesh;
+            Material mat = obj.GetMaterial();
+
             // Add vertex data
             int firstVertex = _vertices.Count;
             _vertices.AddRange(mesh.vertices);
-            // Add index data - if the vertex buffer wasn't empty before, the
-            // indices need to be offset
+
+            //Add uv data
+            int firstuv = _uv.Count;
+            _uv.AddRange(mesh.uv);
+
+            // Add index data - if the vertex buffer wasn't empty before, the indices need to be offset
             int firstIndex = _indices.Count;
             var indices = mesh.GetIndices(0);
             _indices.AddRange(indices.Select(index => index + firstVertex));
+
             // Add the object itself
             _meshObjects.Add(new MeshObject()
             {
@@ -168,10 +184,15 @@ public class RayTracingMaster : MonoBehaviour{
                 indices_offset = firstIndex,
                 indices_count = indices.Length
             });
+
+            // Add the albedo textures
+            _albedoTextures.Add(mat.GetTexture("Albedo"));
         }
         CreateComputeBuffer(ref _meshObjectBuffer, _meshObjects, 72);
         CreateComputeBuffer(ref _vertexBuffer, _vertices, 12);
+        CreateComputeBuffer(ref _uvBuffer, _uv, 8);
         CreateComputeBuffer(ref _indexBuffer, _indices, 4);
+        //CreateComputeBuffer(ref _albedoBuffer, _albedoTextures, 4);
     }
 
     //===========================================================================
@@ -240,6 +261,7 @@ public class RayTracingMaster : MonoBehaviour{
         RayTracingShader.SetFloat("_Seed", Random.value);
         SetComputeBuffer("_MeshObjects", _meshObjectBuffer);
         SetComputeBuffer("_Vertices", _vertexBuffer);
+        SetComputeBuffer("_UV", _uvBuffer);
         SetComputeBuffer("_Indices", _indexBuffer);
     }
 
