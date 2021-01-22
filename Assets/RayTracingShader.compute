@@ -37,6 +37,8 @@ StructuredBuffer<MeshObject> _MeshObjects;
 StructuredBuffer<float3> _Vertices;
 StructuredBuffer<float2> _UV;
 StructuredBuffer<int> _Indices;
+//StructuredBuffer<int> _MeshObjIndices;
+RWTexture2DArray<float4> _Albedo : register(u0);
 
 float sdot(float3 x, float3 y, float f = 1.0f)
 {
@@ -186,6 +188,7 @@ bool IntersectTriangle_MT97(Ray ray, float3 vert0, float3 vert1, float3 vert2, i
     return true;
 }
 
+float2 UVCoords;
 //updates a RayHit if the ray hits a mesh, this function is built out of many triangle intersections
 void IntersectMeshObject(Ray ray, inout RayHit bestHit, MeshObject meshObject)
 {
@@ -201,10 +204,15 @@ void IntersectMeshObject(Ray ray, inout RayHit bestHit, MeshObject meshObject)
         {
             if (t > 0 && t < bestHit.distance)
             {
+                float2 UV0 = _UV[_Indices[i]];
+                float2 UV1 = _UV[_Indices[i + 1]];
+                float2 UV2 = _UV[_Indices[i + 2]];
+                UVCoords = 512*((1 - u - v) * UV0 + u * UV1 + v * UV2);
+
                 bestHit.distance = t;
                 bestHit.position = ray.origin + t * ray.direction;
                 bestHit.normal = normalize(cross(v1 - v0, v2 - v0));
-                bestHit.albedo = 0.0f;
+                bestHit.albedo = _Albedo[uint3(UVCoords[0],UVCoords[1],0)];
                 bestHit.specular = 0.65f;
                 bestHit.smoothness = 0.99f;
                 bestHit.emissive = 0.0f;
@@ -340,5 +348,6 @@ void CSMain (uint3 id : SV_DispatchThreadID)
         if (!any(ray.energy))
             break;
     }
+    //result = float3(UVCoords,1);
     Result[id.xy] = float4(result, 1);
 }

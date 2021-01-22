@@ -3,7 +3,8 @@ using System.Collections.Generic;
 using UnityEngine;
 using System.Linq;
 
-public class RayTracingMaster : MonoBehaviour{
+public class RayTracingMaster : MonoBehaviour
+{
     public ComputeShader RayTracingShader;
     public Texture SkyboxTexture;
     private RenderTexture _target;
@@ -121,12 +122,11 @@ public class RayTracingMaster : MonoBehaviour{
     private static List<Vector3> _vertices = new List<Vector3>();
     private static List<Vector2> _uv = new List<Vector2>();
     private static List<int> _indices = new List<int>();
-    private static List<Texture> _albedoTextures = new List<Texture>();
+    public RenderTexture _albedoTextures;
     private ComputeBuffer _meshObjectBuffer;
     private ComputeBuffer _vertexBuffer;
     private ComputeBuffer _uvBuffer;
     private ComputeBuffer _indexBuffer;
-    private ComputeBuffer _albedoBuffer;
 
     private static bool _meshObjectsNeedRebuilding = false;
     private static List<RayTracingObject> _rayTracingObjects = new List<RayTracingObject>();
@@ -157,7 +157,13 @@ public class RayTracingMaster : MonoBehaviour{
         _vertices.Clear();
         _uv.Clear();
         _indices.Clear();
-        _albedoTextures.Clear();
+
+        _albedoTextures = new RenderTexture(512, 512, 3, RenderTextureFormat.Default, RenderTextureReadWrite.Default);
+        _albedoTextures.dimension = UnityEngine.Rendering.TextureDimension.Tex2DArray;
+        _albedoTextures.enableRandomWrite = true;
+        _albedoTextures.volumeDepth = 1;
+        _albedoTextures.Create();
+
         // Loop over all objects and gather their data
         foreach (RayTracingObject obj in _rayTracingObjects)
         {
@@ -186,7 +192,8 @@ public class RayTracingMaster : MonoBehaviour{
             });
 
             // Add the albedo textures
-            _albedoTextures.Add(mat.GetTexture("Albedo"));
+            //_albedoTextures.Add(mat.GetTexture("_MainTex"));
+            Graphics.Blit(mat.GetTexture("_MainTex"), _albedoTextures);
         }
         CreateComputeBuffer(ref _meshObjectBuffer, _meshObjects, 72);
         CreateComputeBuffer(ref _vertexBuffer, _vertices, 12);
@@ -263,6 +270,7 @@ public class RayTracingMaster : MonoBehaviour{
         SetComputeBuffer("_Vertices", _vertexBuffer);
         SetComputeBuffer("_UV", _uvBuffer);
         SetComputeBuffer("_Indices", _indexBuffer);
+        RayTracingShader.SetTexture(0,"_Albedo", _albedoTextures);
     }
 
     //===========================================================================
