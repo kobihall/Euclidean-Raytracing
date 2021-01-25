@@ -27,6 +27,12 @@ public class RayTracingMaster : MonoBehaviour{
     public uint SpheresMax = 100;
     public float SpherePlacementRadius = 20.0f;
     private ComputeBuffer _sphereBuffer;
+    [Range(1,16)]
+    public float Aperature = 16f;
+    [Range(0,20)]
+    public float FocusDist = 5f;
+    public bool UpdateTAA = false;
+    public bool TemporalAverage = true;
 
     private Camera _camera;
 
@@ -63,6 +69,11 @@ public class RayTracingMaster : MonoBehaviour{
         {
             _currentSample = 0;
             transform.hasChanged = false;
+        }
+        if(UpdateTAA || !TemporalAverage)
+        {
+            _currentSample = 0;
+            UpdateTAA = false;
         }
     }
 
@@ -241,6 +252,8 @@ public class RayTracingMaster : MonoBehaviour{
         SetComputeBuffer("_MeshObjects", _meshObjectBuffer);
         SetComputeBuffer("_Vertices", _vertexBuffer);
         SetComputeBuffer("_Indices", _indexBuffer);
+        RayTracingShader.SetFloat("_Aperature", Aperature);
+        RayTracingShader.SetFloat("_FocusDist", FocusDist);
     }
 
     //===========================================================================
@@ -289,7 +302,10 @@ public class RayTracingMaster : MonoBehaviour{
         _addMaterial.SetFloat("_Sample", _currentSample);
         Graphics.Blit(_target, _converged, _addMaterial);
         Graphics.Blit(_converged, destination);
-        _currentSample++;
+        if(TemporalAverage)
+        {
+            _currentSample++;            
+        }
     }
 
     private void OnRenderImage(RenderTexture source, RenderTexture destination)

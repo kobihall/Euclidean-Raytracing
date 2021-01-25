@@ -311,14 +311,17 @@ float3 Shade(inout Ray ray, RayHit hit)
 }
 
 //Creates a Ray at a given uv value of the camera's plane
+float _Aperature;
+float _FocusDist;
+
 Ray CreateCameraRayDoF(float2 uv) {
-    float3 offset = .01*SampleHemisphere(float3(0,0,1),0.0f);
+    float3 offset = .1*SampleHemisphere(float3(0,0,1),0.0f)/_Aperature;
 
     // Transform the camera origin to world space
     float3 origin = mul(_CameraToWorld, float4(offset.xy, 0.0f, 1.0f)).xyz;
 
     // Invert the perspective projection of the view-space position
-    float3 direction = mul(_CameraInverseProjection, float4(uv, 0.0f, 1.0f)).xyz-float3(offset.xy,0.0f);
+    float3 direction = mul(_CameraInverseProjection, float4(uv*_FocusDist, 0.0f, _FocusDist)).xyz-float3(offset.xy,0.0f);
     // Transform the direction from camera to world space and normalize
     direction = mul(_CameraToWorld, float4(direction, 0.0f)).xyz;
     direction = normalize(direction);
