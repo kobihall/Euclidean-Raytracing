@@ -315,7 +315,7 @@ float _Aperature;
 float _FocusDist;
 
 Ray CreateCameraRayDoF(float2 uv) {
-    float3 offset = .1*SampleHemisphere(float3(0,0,1),0.0f)/_Aperature;
+    float3 offset = _Aperature*.01*SampleHemisphere(float3(0,0,1),0.0f);
 
     // Transform the camera origin to world space
     float3 origin = mul(_CameraToWorld, float4(offset.xy, 0.0f, 1.0f)).xyz;

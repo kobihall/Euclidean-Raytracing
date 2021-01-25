@@ -28,8 +28,8 @@ public class RayTracingMaster : MonoBehaviour{
     public float SpherePlacementRadius = 20.0f;
     private ComputeBuffer _sphereBuffer;
     [Range(1,16)]
-    public float Aperature = 16f;
-    [Range(0,20)]
+    public float FStop = 16f;
+    [Range(0.1f,20f)]
     public float FocusDist = 5f;
     public bool UpdateTAA = false;
     public bool TemporalAverage = true;
@@ -252,7 +252,7 @@ public class RayTracingMaster : MonoBehaviour{
         SetComputeBuffer("_MeshObjects", _meshObjectBuffer);
         SetComputeBuffer("_Vertices", _vertexBuffer);
         SetComputeBuffer("_Indices", _indexBuffer);
-        RayTracingShader.SetFloat("_Aperature", Aperature);
+        RayTracingShader.SetFloat("_Aperature", _camera.focalLength/FStop);
         RayTracingShader.SetFloat("_FocusDist", FocusDist);
     }
 
